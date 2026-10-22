@@ -1,0 +1,12 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+coverage/
+uploads/
+.expo/
+.mobile/
+mobile-backup-sdk54/
+.DS_Store

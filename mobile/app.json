@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "MiniLedger",
+    "slug": "miniledger",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.ipardhang.miniledger",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "MiniLedger needs photo access to attach receipts.",
+          "cameraPermission": "MiniLedger needs the camera to photograph receipts."
+        }
+      ],
+      "expo-secure-store",
+      "expo-status-bar"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "24c966a2-5f0e-400a-b82c-fc64ca578da9"
+      }
+    }
+  }
+}
