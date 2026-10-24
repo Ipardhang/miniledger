@@ -28,7 +28,24 @@ if (isProduction && !process.env.TWILIO_MESSAGING_SERVICE_SID && !process.env.TW
   throw new Error('Production requires TWILIO_MESSAGING_SERVICE_SID or TWILIO_FROM_NUMBER.');
 }
 
-export const config = {
+if (isProduction && process.env.VERCEL && process.env.RECEIPT_STORAGE !== 's3') {
+  throw new Error('Vercel production requires RECEIPT_STORAGE=s3.');
+}
+
+if (
+  isProduction &&
+  process.env.RECEIPT_STORAGE === 's3' &&
+  (!process.env.S3_ENDPOINT ||
+    !process.env.S3_BUCKET ||
+    !process.env.S3_ACCESS_KEY_ID ||
+    !process.env.S3_SECRET_ACCESS_KEY)
+) {
+  throw new Error(
+    'S3 receipt storage requires S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY.',
+  );
+}
+
+
   port: Number(process.env.PORT ?? 4000),
   databaseUrl: process.env.DATABASE_URL ?? 'postgres://miniledger:miniledger@localhost:5432/miniledger',
   jwtSecret: jwtSecret || 'dev-only-secret-change-me',
