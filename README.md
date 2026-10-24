@@ -148,4 +148,21 @@ npm run dev
 ```
 
 For the browser version, use `npm run web`.
-\n## Production hardening\n\nProduction configuration intentionally fails fast unless the security-sensitive settings are present.\n\n- Set a random `JWT_SECRET` (32+ characters).\n- Set `APP_ORIGINS` to the exact browser origins you allow.\n- Configure Twilio with `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN` and either `TWILIO_MESSAGING_SERVICE_SID` or `TWILIO_FROM_NUMBER`.\n- Do not set `MOCK_OTP` in production.\n- On Vercel, set `RECEIPT_STORAGE=s3` and configure the S3-compatible object storage variables in `backend/.env.example`.\n- The API now rate-limits OTP requests, consumes OTPs atomically, rotates refresh tokens, and records security/audit events.\n- Receipt uploads are processed in memory, have a 5 MB limit, and verify the file signature before storage.\n\nFor the mobile production build, set:\n\n    EXPO_PUBLIC_API_URL=https://your-api.example.com\n\nProduction builds no longer fall back to a developer-machine LAN address.
+
+## Production hardening
+
+Production configuration intentionally fails fast unless the security-sensitive settings are present.
+
+- Set a random `JWT_SECRET` (32+ characters).
+- Set `APP_ORIGINS` to the exact browser origins you allow.
+- Configure Twilio with `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN` and either `TWILIO_MESSAGING_SERVICE_SID` or `TWILIO_FROM_NUMBER`.
+- Do not set `MOCK_OTP` in production.
+- On Vercel, set `RECEIPT_STORAGE=s3` and configure the S3-compatible object storage variables in `backend/.env.example`.
+- The API now rate-limits OTP requests, consumes OTPs atomically, rotates refresh tokens, and records security/audit events.
+- Receipt uploads are processed in memory, have a 5 MB limit, and verify the file signature before storage.
+
+For the mobile production build, set:
+
+    EXPO_PUBLIC_API_URL=https://your-api.example.com
+
+Production builds no longer fall back to a developer-machine LAN address.
