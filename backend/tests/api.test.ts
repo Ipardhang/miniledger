@@ -12,7 +12,7 @@ const phoneB = `+9197${suffix}`;
 async function login(phone: string): Promise<string> {
   await request(app).post('/auth/request-otp').send({ phone }).expect(200);
   const res = await request(app).post('/auth/verify-otp').send({ phone, otp: '123456' }).expect(200);
-  return res.body.token;
+  return res.body.accessToken;
 }
 
 let tokenA: string;
