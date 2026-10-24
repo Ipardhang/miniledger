@@ -38,7 +38,7 @@ describe('auth', () => {
     await request(app).post('/auth/request-otp').send({ phone: '123' }).expect(400);
   });
 
-  it('rejects a wrong OTP', async () => {
+  it('refreshes and rotates sessions', async () => {\n    const first = await request(app).post('/auth/request-otp').send({ phone: phoneA }).expect(200);\n    expect(first.body.message).toMatch(/verification/i);\n    const login = await request(app).post('/auth/verify-otp').send({ phone: phoneA, otp: '123456' }).expect(200);\n    const refreshed = await request(app).post('/auth/refresh').send({ refreshToken: login.body.refreshToken }).expect(200);\n    expect(refreshed.body.accessToken).toBeTruthy();\n    expect(refreshed.body.refreshToken).toBeTruthy();\n    await request(app).post('/auth/refresh').send({ refreshToken: login.body.refreshToken }).expect(401);\n  });\n\n  it('rejects a wrong OTP', async () => {
     await request(app).post('/auth/request-otp').send({ phone: phoneA }).expect(200);
     await request(app).post('/auth/verify-otp').send({ phone: phoneA, otp: '000000' }).expect(401);
   });
@@ -112,7 +112,7 @@ describe('loans', () => {
       .field('friendName', 'Kabir')
       .field('amount', '75.25')
       .field('dueDate', '2999-06-01')
-      .attach('receipt', Buffer.from('fake-image-bytes'), { filename: 'r.png', contentType: 'image/png' })
+      .attach('receipt', Buffer.from('89504e470d0a1a0a', 'hex'), { filename: 'r.png', contentType: 'image/png' })
       .expect(201);
     expect(res.body.hasReceipt).toBe(true);
     expect(res.body.amount).toBe(75.25);
