@@ -12,6 +12,10 @@ if (isProduction && (!jwtSecret || jwtSecret.length < 32)) {
   throw new Error('Production requires a JWT_SECRET of at least 32 characters.');
 }
 
+if (isProduction && !process.env.APP_ORIGINS) {
+  throw new Error('Production requires APP_ORIGINS to protect web clients with an origin allowlist.');
+}
+
 if (isProduction && process.env.MOCK_OTP) {
   throw new Error('MOCK_OTP must not be configured in production.');
 }
@@ -57,7 +61,7 @@ if (
   otpRequestWindowMs: 60 * 60 * 1000,
   otpRequestMaxPerPhone: 5,
   otpRequestMaxPerIp: 20,
-  otpCooldownMs: 30 * 1000,
+  otpCooldownMs: Number(process.env.OTP_COOLDOWN_MS ?? 30 * 1000),
   otpVerifyWindowMs: 15 * 60 * 1000,
   otpVerifyMaxPerPhone: 10,
   uploadDir: process.env.UPLOAD_DIR ?? path.join(process.cwd(), 'uploads'),
