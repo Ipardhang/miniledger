@@ -30,6 +30,10 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     res.status(err.status).json({ error: err.message });
     return;
   }
+  if (err?.message === 'Origin not allowed') {
+    res.status(403).json({ error: 'Origin not allowed' });
+    return;
+  }
   if (err?.type === 'entity.parse.failed') {
     res.status(400).json({ error: 'Malformed JSON body' });
     return;
