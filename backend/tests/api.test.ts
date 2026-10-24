@@ -38,7 +38,17 @@ describe('auth', () => {
     await request(app).post('/auth/request-otp').send({ phone: '123' }).expect(400);
   });
 
-  it('refreshes and rotates sessions', async () => {\n    const first = await request(app).post('/auth/request-otp').send({ phone: phoneA }).expect(200);\n    expect(first.body.message).toMatch(/verification/i);\n    const login = await request(app).post('/auth/verify-otp').send({ phone: phoneA, otp: '123456' }).expect(200);\n    const refreshed = await request(app).post('/auth/refresh').send({ refreshToken: login.body.refreshToken }).expect(200);\n    expect(refreshed.body.accessToken).toBeTruthy();\n    expect(refreshed.body.refreshToken).toBeTruthy();\n    await request(app).post('/auth/refresh').send({ refreshToken: login.body.refreshToken }).expect(401);\n  });\n\n  it('rejects a wrong OTP', async () => {
+  it('refreshes and rotates sessions', async () => {
+    const first = await request(app).post('/auth/request-otp').send({ phone: phoneA }).expect(200);
+    expect(first.body.message).toMatch(/verification/i);
+    const login = await request(app).post('/auth/verify-otp').send({ phone: phoneA, otp: '123456' }).expect(200);
+    const refreshed = await request(app).post('/auth/refresh').send({ refreshToken: login.body.refreshToken }).expect(200);
+    expect(refreshed.body.accessToken).toBeTruthy();
+    expect(refreshed.body.refreshToken).toBeTruthy();
+    await request(app).post('/auth/refresh').send({ refreshToken: login.body.refreshToken }).expect(401);
+  });
+
+  it('rejects a wrong OTP', async () => {
     await request(app).post('/auth/request-otp').send({ phone: phoneA }).expect(200);
     await request(app).post('/auth/verify-otp').send({ phone: phoneA, otp: '000000' }).expect(401);
   });
