@@ -5,7 +5,7 @@ A small app to track money you've lent to friends.
 - **Backend:** Node.js + TypeScript + Express + PostgreSQL
 - **App:** React Native (Expo) + TypeScript
 
-Features: phone login with a mock OTP (printed in the server log), add a loan entry
+Features: phone login with development OTP mode or production SMS delivery, rotating sessions, add a loan entry
 (friend name, amount, due date), mark it repaid, overdue highlighting, a summary card
 (total lent / repaid / overdue), optional receipt photo per entry, input validation, and tests.
 
@@ -131,8 +131,7 @@ curl localhost:4000/loans/summary -H "Authorization: Bearer <TOKEN>"
   `+919876543210` are different accounts. Use one format consistently.
 - **Receipts** are stored on local disk in `backend/uploads/` under random names. For production
   you'd use object storage (S3 etc.).
-- **Not included (out of scope):** real SMS delivery, rate limiting, refresh tokens, editing or
-  deleting entries, partial repayments.
+- **Still out of scope:** editing or deleting entries and partial repayments.
 - Currency is set in `mobile/src/format.ts` (`CURRENCY`, `LOCALE`).
 
 
@@ -149,3 +148,21 @@ npm run dev
 ```
 
 For the browser version, use `npm run web`.
+
+## Production hardening
+
+Production configuration intentionally fails fast unless the security-sensitive settings are present.
+
+- Set a random `JWT_SECRET` (32+ characters).
+- Set `APP_ORIGINS` to the exact browser origins you allow.
+- Configure Twilio with `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN` and either `TWILIO_MESSAGING_SERVICE_SID` or `TWILIO_FROM_NUMBER`.
+- Do not set `MOCK_OTP` in production.
+- On Vercel, set `RECEIPT_STORAGE=s3` and configure the S3-compatible object storage variables in `backend/.env.example`.
+- The API now rate-limits OTP requests, consumes OTPs atomically, rotates refresh tokens, and records security/audit events.
+- Receipt uploads are processed in memory, have a 5 MB limit, and verify the file signature before storage.
+
+For the mobile production build, set:
+
+    EXPO_PUBLIC_API_URL=https://your-api.example.com
+
+Production builds no longer fall back to a developer-machine LAN address.

@@ -1,15 +1,13 @@
-import fs from 'fs';
-import path from 'path';
+import { receiptUpload } from './upload';
 import { Request, Router } from 'express';
 import { requireAuth } from './auth';
 import { config } from './config';
 import { pool } from './db';
 import { ah, HttpError } from './errors';
-import { receiptUpload } from './upload';
+import { audit } from './audit';
+import { loadReceipt, storeReceipt, deleteReceipt } from './storage';
 import { createLoanSchema, idSchema } from './validation';
 
-// Dates are returned as plain YYYY-MM-DD strings to avoid timezone surprises.
-// "Overdue" = not repaid and due before today (database date).
 const LOAN_COLS = `
   id,
   friend_name AS "friendName",
@@ -30,92 +28,95 @@ const loanId = (req: Request): string => {
   return parsed.data;
 };
 
-// List: unrepaid first (soonest due first), then repaid.
-loansRouter.get(
-  '/',
-  ah(async (_req, res) => {
-    const { rows } = await pool.query(
-      `SELECT ${LOAN_COLS} FROM loans WHERE user_id = $1
-       ORDER BY (repaid_at IS NOT NULL), due_date ASC, created_at DESC`,
-      [res.locals.userId],
-    );
-    res.json(rows);
-  }),
-);
+loansRouter.get('/', ah(async (_req, res) => {
+  const { rows } = await pool.query(
+    `SELECT ${LOAN_COLS} FROM loans WHERE user_id = $1
+     ORDER BY (repaid_at IS NOT NULL), due_date ASC, created_at DESC`,
+    [res.locals.userId],
+  );
+  res.json(rows);
+}));
 
-// Summary (declared before /:id routes).
-loansRouter.get(
-  '/summary',
-  ah(async (_req, res) => {
-    const { rows } = await pool.query(
-      `SELECT
-         COALESCE(SUM(amount), 0)::float8 AS "totalLent",
-         COALESCE(SUM(amount) FILTER (WHERE repaid_at IS NOT NULL), 0)::float8 AS "totalRepaid",
-         COALESCE(SUM(amount) FILTER (WHERE repaid_at IS NULL AND due_date < CURRENT_DATE), 0)::float8
-           AS "overdueAmount",
-         (COUNT(*) FILTER (WHERE repaid_at IS NULL AND due_date < CURRENT_DATE))::int AS "overdueCount"
-       FROM loans WHERE user_id = $1`,
-      [res.locals.userId],
-    );
-    const s = rows[0];
-    res.json({ ...s, outstanding: Math.round((s.totalLent - s.totalRepaid) * 100) / 100 });
-  }),
-);
+loansRouter.get('/summary', ah(async (_req, res) => {
+  const { rows } = await pool.query(
+    `SELECT
+       COALESCE(SUM(amount), 0)::float8 AS "totalLent",
+       COALESCE(SUM(amount) FILTER (WHERE repaid_at IS NOT NULL), 0)::float8 AS "totalRepaid",
+       COALESCE(SUM(amount) FILTER (WHERE repaid_at IS NULL AND due_date < CURRENT_DATE), 0)::float8 AS "overdueAmount",
+       (COUNT(*) FILTER (WHERE repaid_at IS NULL AND due_date < CURRENT_DATE))::int AS "overdueCount"
+     FROM loans WHERE user_id = $1`,
+    [res.locals.userId],
+  );
+  const s = rows[0];
+  res.json({ ...s, outstanding: Math.round((s.totalLent - s.totalRepaid) * 100) / 100 });
+}));
 
-// Create. Accepts JSON, or multipart/form-data with an optional `receipt` image.
 loansRouter.post(
   '/',
   receiptUpload.single('receipt'),
   ah(async (req, res) => {
     const parsed = createLoanSchema.safeParse(req.body);
-    if (!parsed.success) {
-      if (req.file) await fs.promises.unlink(req.file.path).catch(() => undefined);
-      throw parsed.error;
-    }
+    if (!parsed.success) throw parsed.error;
+
     const { friendName, amount, dueDate } = parsed.data;
-    const { rows } = await pool.query(
-      `INSERT INTO loans (user_id, friend_name, amount, due_date, receipt_path)
-       VALUES ($1, $2, $3, $4, $5) RETURNING ${LOAN_COLS}`,
-      [res.locals.userId, friendName, amount, dueDate, req.file?.filename ?? null],
-    );
-    res.status(201).json(rows[0]);
-  }),
-);
+    let receiptPath: string | null = null;
 
-// Mark as repaid.
-loansRouter.patch(
-  '/:id/repay',
-  ah(async (req, res) => {
-    const id = loanId(req);
-    const { rows } = await pool.query(
-      `UPDATE loans SET repaid_at = now()
-       WHERE id = $1 AND user_id = $2 AND repaid_at IS NULL
-       RETURNING ${LOAN_COLS}`,
-      [id, res.locals.userId],
-    );
-    if (rows[0]) {
-      res.json(rows[0]);
-      return;
+    if (req.file) {
+      receiptPath = await storeReceipt(
+        res.locals.userId,
+        req.file.buffer,
+        req.file.mimetype,
+      );
     }
-    const exists = await pool.query('SELECT 1 FROM loans WHERE id = $1 AND user_id = $2', [
-      id,
-      res.locals.userId,
-    ]);
-    throw exists.rowCount
-      ? new HttpError(409, 'Loan is already marked as repaid')
-      : new HttpError(404, 'Loan not found');
-  }),
-);
 
-// Receipt image (authenticated; only the owner can fetch it).
-loansRouter.get(
-  '/:id/receipt',
-  ah(async (req, res) => {
-    const { rows } = await pool.query(
-      'SELECT receipt_path FROM loans WHERE id = $1 AND user_id = $2',
-      [loanId(req), res.locals.userId],
-    );
-    if (!rows[0]?.receipt_path) throw new HttpError(404, 'No receipt for this entry');
-    res.sendFile(path.resolve(config.uploadDir, rows[0].receipt_path));
+    try {
+      const { rows } = await pool.query(
+        `INSERT INTO loans (user_id, friend_name, amount, due_date, receipt_path)
+         VALUES ($1, $2, $3, $4, $5) RETURNING ${LOAN_COLS}`,
+        [res.locals.userId, friendName, amount, dueDate, receiptPath],
+      );
+
+      await audit('loan.created', res.locals.userId, res.locals.requestId, {
+        loanId: rows[0].id,
+        amount,
+        hasReceipt: Boolean(receiptPath),
+      });
+
+      res.status(201).json(rows[0]);
+    } catch (error) {
+      if (receiptPath) await deleteReceipt(receiptPath).catch(() => undefined);
+      throw error;
+    }
   }),
 );
+loansRouter.patch('/:id/repay', ah(async (req, res) => {
+  const id = loanId(req);
+  const { rows } = await pool.query(
+    `UPDATE loans SET repaid_at = now()
+     WHERE id = $1 AND user_id = $2 AND repaid_at IS NULL
+     RETURNING ${LOAN_COLS}`,
+    [id, res.locals.userId],
+  );
+  if (rows[0]) {
+    await audit('loan.repaid', res.locals.userId, res.locals.requestId, { loanId: id });
+    res.json(rows[0]);
+    return;
+  }
+  const exists = await pool.query('SELECT 1 FROM loans WHERE id = $1 AND user_id = $2', [id, res.locals.userId]);
+  throw exists.rowCount
+    ? new HttpError(409, 'Loan is already marked as repaid')
+    : new HttpError(404, 'Loan not found');
+}));
+
+loansRouter.get('/:id/receipt', ah(async (req, res) => {
+  const { rows } = await pool.query(
+    'SELECT receipt_path FROM loans WHERE id = $1 AND user_id = $2',
+    [loanId(req), res.locals.userId],
+  );
+  if (!rows[0]?.receipt_path) throw new HttpError(404, 'No receipt for this entry');
+  const receipt = await loadReceipt(rows[0].receipt_path);
+  res.setHeader('Content-Type', receipt.contentType);
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.send(receipt.buffer);
+}));
+
