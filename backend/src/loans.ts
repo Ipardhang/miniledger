@@ -1,4 +1,4 @@
-import fs from 'fs';
+import { receiptUpload } from './upload';
 import { Request, Router } from 'express';
 import { requireAuth } from './auth';
 import { config } from './config';
@@ -51,37 +51,44 @@ loansRouter.get('/summary', ah(async (_req, res) => {
   res.json({ ...s, outstanding: Math.round((s.totalLent - s.totalRepaid) * 100) / 100 });
 }));
 
-loansRouter.post('/', ah(async (req, res) => {
-  const parsed = createLoanSchema.safeParse(req.body);
-  if (!parsed.success) throw parsed.error;
+loansRouter.post(
+  '/',
+  receiptUpload.single('receipt'),
+  ah(async (req, res) => {
+    const parsed = createLoanSchema.safeParse(req.body);
+    if (!parsed.success) throw parsed.error;
 
-  const { friendName, amount, dueDate } = parsed.data;
-  const contentType = req.header('content-type')?.split(';')[0] || '';
-  let receiptPath: string | null = null;
-  let receiptBuffer: Buffer | null = null;
+    const { friendName, amount, dueDate } = parsed.data;
+    let receiptPath: string | null = null;
 
-  if (contentType === 'application/json') {
-    receiptBuffer = null;
-  }
+    if (req.file) {
+      receiptPath = await storeReceipt(
+        res.locals.userId,
+        req.file.buffer,
+        req.file.mimetype,
+      );
+    }
 
-  const { rows } = await pool.query(
-    `INSERT INTO loans (user_id, friend_name, amount, due_date, receipt_path)
-     VALUES ($1, $2, $3, $4, NULL) RETURNING ${LOAN_COLS}`,
-    [res.locals.userId, friendName, amount, dueDate],
-  );
+    try {
+      const { rows } = await pool.query(
+        `INSERT INTO loans (user_id, friend_name, amount, due_date, receipt_path)
+         VALUES ($1, $2, $3, $4, $5) RETURNING ${LOAN_COLS}`,
+        [res.locals.userId, friendName, amount, dueDate, receiptPath],
+      );
 
-  if (receiptBuffer) {
-    receiptPath = await storeReceipt(res.locals.userId, receiptBuffer, 'application/octet-stream');
-  }
+      await audit('loan.created', res.locals.userId, res.locals.requestId, {
+        loanId: rows[0].id,
+        amount,
+        hasReceipt: Boolean(receiptPath),
+      });
 
-  await audit('loan.created', res.locals.userId, res.locals.requestId, {
-    loanId: rows[0].id,
-    amount,
-  });
-
-  res.status(201).json(rows[0]);
-}));
-
+      res.status(201).json(rows[0]);
+    } catch (error) {
+      if (receiptPath) await deleteReceipt(receiptPath).catch(() => undefined);
+      throw error;
+    }
+  }),
+);
 loansRouter.patch('/:id/repay', ah(async (req, res) => {
   const id = loanId(req);
   const { rows } = await pool.query(
