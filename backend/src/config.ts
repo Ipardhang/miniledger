@@ -28,8 +28,14 @@ if (isProduction && !process.env.TWILIO_AUTH_TOKEN) {
   throw new Error('Production requires TWILIO_AUTH_TOKEN.');
 }
 
-if (isProduction && !process.env.TWILIO_MESSAGING_SERVICE_SID && !process.env.TWILIO_FROM_NUMBER) {
-  throw new Error('Production requires TWILIO_MESSAGING_SERVICE_SID or TWILIO_FROM_NUMBER.');
+if (
+  isProduction &&
+  !process.env.TWILIO_MESSAGING_SERVICE_SID &&
+  !process.env.TWILIO_FROM_NUMBER
+) {
+  throw new Error(
+    'Production requires TWILIO_MESSAGING_SERVICE_SID or TWILIO_FROM_NUMBER.',
+  );
 }
 
 if (isProduction && process.env.VERCEL && process.env.RECEIPT_STORAGE !== 's3') {
@@ -49,21 +55,26 @@ if (
   );
 }
 
-
+export const config = {
   port: Number(process.env.PORT ?? 4000),
-  databaseUrl: process.env.DATABASE_URL ?? 'postgres://miniledger:miniledger@localhost:5432/miniledger',
+  databaseUrl:
+    process.env.DATABASE_URL ??
+    'postgres://miniledger:miniledger@localhost:5432/miniledger',
   jwtSecret: jwtSecret || 'dev-only-secret-change-me',
   mockOtp: process.env.MOCK_OTP || undefined,
+
   otpTtlMs: 5 * 60 * 1000,
   otpMaxAttempts: 5,
-  accessTokenTtl: '30m',
-  refreshTokenTtlMs: 30 * 24 * 60 * 60 * 1000,
   otpRequestWindowMs: 60 * 60 * 1000,
   otpRequestMaxPerPhone: 5,
   otpRequestMaxPerIp: 20,
   otpCooldownMs: Number(process.env.OTP_COOLDOWN_MS ?? 30 * 1000),
   otpVerifyWindowMs: 15 * 60 * 1000,
   otpVerifyMaxPerPhone: 10,
+
+  accessTokenTtl: '30m',
+  refreshTokenTtlMs: 30 * 24 * 60 * 60 * 1000,
+
   uploadDir: process.env.UPLOAD_DIR ?? path.join(process.cwd(), 'uploads'),
   receiptStorage: process.env.RECEIPT_STORAGE ?? 'local',
   s3Endpoint: process.env.S3_ENDPOINT,
@@ -71,9 +82,11 @@ if (
   s3Region: process.env.S3_REGION ?? 'auto',
   s3AccessKeyId: process.env.S3_ACCESS_KEY_ID,
   s3SecretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+
   twilioAccountSid: process.env.TWILIO_ACCOUNT_SID,
   twilioAuthToken: process.env.TWILIO_AUTH_TOKEN,
   twilioMessagingServiceSid: process.env.TWILIO_MESSAGING_SERVICE_SID,
   twilioFromNumber: process.env.TWILIO_FROM_NUMBER,
+
   appOrigins: allowedOrigins,
 };
